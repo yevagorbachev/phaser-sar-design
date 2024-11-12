@@ -1,7 +1,7 @@
 % Transmitting characteristics
 radar.P_tx_dBW = 60;
 radar.Rx_amp_dB = 0;
-radar.f_c = 9e9;
+radar.f_c = 10e9;
 radar.lambda = c / radar.f_c;
 radar.tau = 10e-6;
 radar.B = 150e6;
@@ -30,7 +30,7 @@ aperture.S_max = 1e3;
 aperture.spd = 140;
 
 % r - each column is a target's position
-% targets.r_grp_aN = [0 500 2e3; 0 -500 0; 0 0 0];
-% targets.rcs_dBsm = [0, 0, 0];
-targets.r_grp_aN = [0; 0; 0];
-targets.rcs_dBsm = [0];
+targets.r_grp_aN = [0 500 2e3; 0 -500 0; 0 0 0];
+targets.rcs_dBsm = [0, 0, 0];
+% targets.r_grp_aN = [0; 0; 0];
+% targets.rcs_dBsm = [0];

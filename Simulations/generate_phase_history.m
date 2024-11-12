@@ -25,7 +25,7 @@ clear; close all;
 c = 299792458;
 k = 1.3806e-23;
 
-rit_scene;
+midterm_scene;
 
 %% Derived variables
 struct2wkspace(radar);
@@ -36,11 +36,6 @@ grazing = atan(h / L_0);
 R_0 = sqrt(h^2 + L_0^2);
 R_min = sqrt(h^2 + L_min^2);
 R_max = sqrt(h^2 + L_max^2);
-
-t_min = 2*R_min/c - tau;
-t_max = 2*R_max/c + tau;
-t_fast = t_min:(1/f_s):t_max;
-n_fast = length(t_fast);
 
 T_min = S_min / spd;
 T_max = S_max / spd;
@@ -98,8 +93,7 @@ SNR = P_tx_dBW + db10(gain^2 * lambda^2 / ((4*pi)^3 * R_0^4)) - P_n_dBW;
 
 K_r = B / tau;
 t_tx = 0:(1/f_s):tau;
-s_tx_t = exp(1i*K_r*t_tx.^2);
-s_rx_tT = zeros(N_slow, n_fast);
+s_tx_t = exp(1i*K_r*t_tx.^2)';
 
 x_rdr_a1T = permute(x_rdr_aT, [1 3 2]);
 r_tgt_aNT = x_rdr_a1T - targets.r_aN;
@@ -110,16 +104,25 @@ t_tgt_1NT = 2*R_tgt_1NT/c;
 F_dop_1NT = 2/lambda * pagemtimes(v_rdr', u_tgt_aNT);
 
 phi_shift_tNT = exp(-2i*pi*(f_c * t_tgt_1NT + permute(t_tx, [2 1]) .* F_dop_1NT));
-phi_rx_tNT = permute(s_tx_t, [2 1]) .* phi_shift_tNT;
+phi_rx_tNT = s_tx_t .* phi_shift_tNT;
 
 rcs_1N = targets.rcs_dBsm;
-P_rx_1NT = antenna_ptn(antenna, look, u_tgt_aNT) .*...
+P_rx_1NT = antenna_ptn(antenna, look, u_tgt_aNT) .^ 2 .*...
     (lambda^2 / (4*pi)^3) ./ R_tgt_1NT.^4 .* ...
     mag10(P_tx_dBW + Rx_amp_dB + rcs_1N - L_dB);
 
 s_rx_tNT = phi_rx_tNT .* sqrt(P_rx_1NT);
+
+t_min = 2*R_min/c - tau;
 i_tgt_1NT = floor((t_tgt_1NT - t_min) * f_s);
 i_tgt_eNT = cat(1, i_tgt_1NT, i_tgt_1NT + length(s_tx_t) - 1);
+i_rx_max = max(i_tgt_eNT(2, :, [1 end]), [], "all");
+t_max = max(2*R_max/c, i_rx_max/f_s + t_min);
+% n_fast = max(i_tgt_eNT())
+% t_max = 2*R_max/c + tau;
+t_fast = t_min:(1/f_s):t_max;
+n_fast = length(t_fast);
+s_rx_tT = zeros(n_fast, N_slow);
 
 % return;
 wb = waitbar(0, "Creating phase history");
