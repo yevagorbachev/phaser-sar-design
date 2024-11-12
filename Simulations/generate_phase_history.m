@@ -1,3 +1,8 @@
+%% Phase History Simulation
+% P22714 Multifrequency SAR
+% Yevgeniy Gorbachev
+% November 2024
+
 clear; close all;
 
 %% Conventions
@@ -20,7 +25,7 @@ clear; close all;
 c = 299792458;
 k = 1.3806e-23;
 
-midterm_scene;
+rit_scene;
 
 %% Derived variables
 struct2wkspace(radar);
@@ -94,7 +99,7 @@ SNR = P_tx_dBW + db10(gain^2 * lambda^2 / ((4*pi)^3 * R_0^4)) - P_n_dBW;
 K_r = B / tau;
 t_tx = 0:(1/f_s):tau;
 s_tx_t = exp(1i*K_r*t_tx.^2);
-s_rx_Tt = zeros(N_slow, n_fast);
+s_rx_tT = zeros(N_slow, n_fast);
 
 x_rdr_a1T = permute(x_rdr_aT, [1 3 2]);
 r_tgt_aNT = x_rdr_a1T - targets.r_aN;
@@ -103,59 +108,37 @@ u_tgt_aNT = r_tgt_aNT ./ R_tgt_1NT;
 
 t_tgt_1NT = 2*R_tgt_1NT/c;
 F_dop_1NT = 2/lambda * pagemtimes(v_rdr', u_tgt_aNT);
-phi_shift_tNT = exp(-2i*pi*(f_c * t_tgt_1NT + t_tx' .* F_dop_1NT ));
 
-G_tgt_1NT = antenna_ptn(antenna, look, u_tgt_aNT);
+phi_shift_tNT = exp(-2i*pi*(f_c * t_tgt_1NT + permute(t_tx, [2 1]) .* F_dop_1NT));
+phi_rx_tNT = permute(s_tx_t, [2 1]) .* phi_shift_tNT;
 
-return;
+rcs_1N = targets.rcs_dBsm;
+P_rx_1NT = antenna_ptn(antenna, look, u_tgt_aNT) .*...
+    (lambda^2 / (4*pi)^3) ./ R_tgt_1NT.^4 .* ...
+    mag10(P_tx_dBW + Rx_amp_dB + rcs_1N - L_dB);
+
+s_rx_tNT = phi_rx_tNT .* sqrt(P_rx_1NT);
+i_tgt_1NT = floor((t_tgt_1NT - t_min) * f_s);
+i_tgt_eNT = cat(1, i_tgt_1NT, i_tgt_1NT + length(s_tx_t) - 1);
+
+% return;
 wb = waitbar(0, "Creating phase history");
 
-% required quantities,  TN:
-%   modulation phase
-%   modulation frequency
-%   antenna gain
-
-% In turn, requiring
-%   Unit vector
-%   Range
-%   Range rate
-
-profile on;
 for slow_i = 1:N_slow
-    x_rdr = x_rdr_aT(:, slow_i);
     for tar_i = 1:N_targets
-        x_tgt = targets.r_aN(:, tar_i);
-        r_tgt = x_tgt - x_rdr;
-        R = norm(r_tgt);
-        u_tgt = r_tgt / R;
-        t_tgt = 2*R/c;
-
-        i_fast_start = floor((t_tgt - t_min)*f_s);
-        i_fast_end = i_fast_start + length(s_tx_t) - 1;
-
-        phi_shift = f_c*t_tgt;
-        F_dop = 2/lambda * v_rdr' * u_tgt;
-        P_rx = mag10(P_tx_dBW + Rx_amp_dB + targets.rcs_dBsm(tar_i) - L_dB) * ...
-            (antenna_ptn(antenna, look, u_tgt)^2 * lambda^2) / ((4*pi)^3 * R^4);
-
-        modul = sqrt(P_rx) * exp(-2i*pi*(phi_shift + t_tx * F_dop));
-        % TODO propogation, scattering, antenna pattern
-
-        s_rx_Tt(slow_i, i_fast_start:i_fast_end) = ...
-            s_rx_Tt(slow_i, i_fast_start:i_fast_end) ...
-            + s_tx_t .* modul;
+        slc = i_tgt_eNT(1, tar_i, slow_i):i_tgt_eNT(2, tar_i, slow_i);
+        s_rx_tT(slc, slow_i) = s_rx_tT(slc, slow_i) + s_rx_tNT(:, tar_i, slow_i);
     end
 
     if mod(slow_i, 50) == 0
         waitbar(slow_i / N_slow, wb, sprintf("Slow-time index %d of %d", slow_i, N_slow));
     end
 end
-profile viewer;
 
 waitbar(1, wb, "Done");
 close(wb);
 
-save("s_rx_Tt.mat", "s_rx_Tt");
+save("s_rx_tT.mat", "s_rx_tT");
 
 function gain = antenna_ptn(ant, drc, u_tgt)
     arguments
