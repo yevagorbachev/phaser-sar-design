@@ -8,7 +8,7 @@ figure(name = "Raw phase history");
 phplot(real(s_rx_tT_noisy), T_slow, t_fast, "Re(s_{rx}) [%sV]");
 
 N_fft = n_fast;
-s_tx_f = fft(conj(fliplr(s_tx_t)), N_fft) / N_fft;
+s_tx_f = fft(conj(flip(s_tx_t, 1)), N_fft) / N_fft;
 s_rx_fT = fft(s_rx_tT_noisy, N_fft, 1) / N_fft;
 s_rx_Tc = ifft(s_rx_fT .* s_tx_f, N_fft, 1);
 

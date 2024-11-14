@@ -23,14 +23,14 @@ antenna.lambda = radar.lambda;
 % Aperture characteristics
 aperture.h = 7620;
 aperture.L_0 = 13e3;
-aperture.L_min = aperture.L_0 - 1e3;
-aperture.L_max = aperture.L_0 + 1e3;
+aperture.L_min = aperture.L_0 - 100;
+aperture.L_max = aperture.L_0 + 100;
 aperture.S_min = -1e3;
 aperture.S_max = 1e3;
 aperture.spd = 140;
 
 % r - each column is a target's position
-targets.r_grp_aN = [0 500 2e3; 0 -500 0; 0 0 0];
-targets.rcs_dBsm = [0, 0, 0];
+targets.r_grp_aN = [-50 -50 0 50; 50 -50 0 50; 0 0 0 0];
+targets.rcs_dBsm = [0, 0, 0, 0];
 % targets.r_grp_aN = [0; 0; 0];
 % targets.rcs_dBsm = [0];
