@@ -92,8 +92,8 @@ gain = antenna_ptn(antenna, eye(3), [0; 1; 0]);
 SNR = P_tx_dBW + db10(gain^2 * lambda^2 / ((4*pi)^3 * R_0^4)) - P_n_dBW;
 
 K_r = B / tau;
-t_tx = 0:(1/f_s):tau;
-s_tx_t = exp(1i*pi*K_r*(t_tx - tau/2).^2)';
+t_tx = (0:(1/f_s):tau)';
+s_tx_t = exp(1i*pi*K_r*(t_tx - tau/2).^2);
 
 x_rdr_a1T = permute(x_rdr_aT, [1 3 2]);
 r_tgt_aNT = x_rdr_a1T - targets.r_aN;
@@ -103,19 +103,11 @@ u_tgt_aNT = r_tgt_aNT ./ R_tgt_1NT;
 t_tgt_1NT = 2*R_tgt_1NT/c;
 F_dop_1NT = 2/lambda * pagemtimes(v_rdr', u_tgt_aNT);
 
-phi_shift_tNT = exp(-2i*pi*(f_c * t_tgt_1NT + permute(t_tx, [2 1]) .* F_dop_1NT));
-phi_rx_tNT = s_tx_t .* phi_shift_tNT;
-
-% Calculate received pulses
-rcs_1N = targets.rcs_dBsm;
-P_rx_1NT = antenna_ptn(antenna, look, u_tgt_aNT) .^ 2 .*...
-    (lambda^2 / (4*pi)^3) ./ R_tgt_1NT.^4 .* ...
-    mag10(P_tx_dBW + Rx_amp_dB + rcs_1N - L_dB);
-s_rx_tNT = phi_rx_tNT .* sqrt(P_rx_1NT);
-
 % Determine destination indices
 t_min = 2*R_min/c - tau;
-i_tgt_1NT = floor((t_tgt_1NT - t_min) * f_s);
+dt_tgt_1NT = t_tgt_1NT - t_min;
+i_tgt_1NT = floor(dt_tgt_1NT * f_s);
+eps_tgt_1NT = dt_tgt_1NT - i_tgt_1NT/f_s;
 i_tgt_eNT = cat(1, i_tgt_1NT, i_tgt_1NT + length(s_tx_t) - 1);
 
 i_rx_max = max(i_tgt_eNT(2, :, [1 end]), [], "all");
@@ -126,7 +118,21 @@ t_fast = t_min:(1/f_s):t_max;
 n_fast = length(t_fast);
 s_rx_tT = zeros(n_fast, N_slow);
 
+% Calculate received pulses
+phi_shift_tNT = exp(-2i*pi*(f_c * t_tgt_1NT ... % Time delay
+    + t_tx .* (F_dop_1NT + K_r*eps_tgt_1NT) ... % Doppler + sampling shift
+    + eps_tgt_1NT.^2/2)); % sampling shift
+% phi_shift_tNT = exp(-2i*pi*(f_c * t_tgt_1NT ... % Time delay
+%     + t_tx .* F_dop_1NT)); % Doppler shift
+phi_rx_tNT = s_tx_t .* phi_shift_tNT;
+
+rcs_1N = targets.rcs_dBsm;
+P_rx_1NT = antenna_ptn(antenna, look, u_tgt_aNT) .^ 2 .*...
+    (lambda^2 / (4*pi)^3) ./ R_tgt_1NT.^4 .* ...
+    mag10(P_tx_dBW + Rx_amp_dB + rcs_1N - L_dB);
+s_rx_tNT = phi_rx_tNT .* sqrt(P_rx_1NT);
 % return;
+
 wb = waitbar(0, "Creating phase history");
 
 for slow_i = 1:N_slow
