@@ -1,23 +1,17 @@
-function siprefix(label_fmt, axis, ruler_field, tick_field)
-    ruler = axis.(ruler_field);
-    [mul, prefix] = get_prefix(ruler.Exponent);
-    ruler.Exponent = 0;
-    ruler.Label.String = sprintf(label_fmt, prefix);
-    axis.(tick_field) = compose(ruler.TickLabelFormat, mul * ruler.TickValues);
+function [prefix, data] = siprefix(data)
+    prefixes = dictionary();
+    prefixes(-12) = "p";
+    prefixes(-9) = "n";
+    prefixes(-6) = "u";
+    prefixes(-3) = "m";
+    prefixes(0) = "";
+    prefixes(3) = "k";
+    prefixes(6) = "M";
+    prefixes(9) = "G";
+    prefixes(12) = "T";
+
+    scale = max(log10(data), [], "all");
+    exponent = floor(scale/3)*3;
+    prefix = prefixes(exponent);
+    data = data / 10^exponent;
 end
-
-function [mul, text] = get_prefix(expnt)
-    % prevpow3 = floor(expnt/3)*3;
-    breakpoints = (-12):3:12;
-    prefixes = ["p", "n", "u", "m", "", "k", "M", "G", "T"];
-    assert(length(prefixes) == length(breakpoints), "Every exponent must be assigned a prefix")
-
-    pt = find(expnt >= breakpoints, 1, "last");
-    if isempty(pt)
-        error("Input out of range");
-    end
-
-    mul = 10 ^ -breakpoints(pt);
-    text = prefixes(pt);
-end
-
