@@ -59,8 +59,7 @@ G_path_dB = db10(lam_c^2 / ((4*pi)^3 * range^4));
 %% Radio Parameters
 % if make_radio_data or x440_data are modified, use clearCache(load_radio_data) to refresh.
 load_radio_data = memoize(@make_radio_data); % so that repeated runs use cached results
-% radio_data = make_radio_data("Data/x440_data.xlsx");
-radio_data = load_radio_data("Data/x440_data.xlsx");
+radio_data = load_radio_data(proj_file("Data", "x440_data.xlsx"));
 
 P_tx_radio_dBm = -27;
 N_thermal_dBm = db10(k*T*BW) + 30; % dBW to dBm
