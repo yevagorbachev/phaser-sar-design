@@ -1,10 +1,12 @@
-function [samples_cC, interms] = ifp_rda(samples_tT, t_fast, K_r, tau, ...
-    T_slow, K_a, spd, lambda)
+function [samples_cC, interms] = ifp_rda(samples_tT, t_fast, B, tau, ...
+    T_slow, spd, R_0, lambda)
     c = 299792458;
     [N_range, N_cross] = size(samples_tT);
 
     f_s = 1/(t_fast(2) - t_fast(1));
     F_prf = 1/(T_slow(2) - T_slow(1));
+    K_r = B/tau;
+    K_a = 2*spd^2/(lambda*R_0);
 
     wb = waitbar(0, "Range-Doppler processing");
 

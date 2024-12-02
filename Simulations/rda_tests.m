@@ -10,7 +10,6 @@ switch sim_set
 
         c = 299792458;
         f_c = 5.3e9;
-        lambda = c / f_c;
         K_r = 20e6/1e-6;
         tau = 2.5e-6;
         R_0 = 20e3;
@@ -23,7 +22,6 @@ switch sim_set
 
         c = 299792458;
         f_c = 5.3e9;
-        lambda = c / f_c;
         K_r = -7.2135e11;
         tau = 41.75e-6;
         R_0 = 988.6475e3;
@@ -34,14 +32,14 @@ switch sim_set
         error("Case not recognized")
 end
 
+lambda = c / f_c;
+B = tau*K_r;
 [n_fast, N_slow] = size(samples_tT);
 
 t_fast = 2*R_0/c + linspace(-n_fast/2, n_fast/2, n_fast) / f_s;
 T_slow = linspace(-N_slow/2, N_slow/2, N_slow) / F_prf;
-[synth_image, interms] = ifp_rda(samples_tT, ...
-    t_fast', K_r, tau, ...
-    T_slow, 2*spd^2/(lambda*R_0), spd, ...
-    lambda);
+[synth_image, interms] = ifp_rda(samples_tT, t_fast', B, tau, ...
+    T_slow, spd, R_0, lambda);
 
 figure(name = "Raw phase history");
 phplot(samples_tT, 1e6*t_fast, T_slow, "re");
@@ -64,7 +62,7 @@ ylabel("Fast-time [\mu s]");
 title("Range-Doppler map")
 
 figure(name = "Azimuth compressed phase history");
-phplot(synth_image, c*t_fast/2 - R_0, spd*T_slow, "log", 60);
+phplot(synth_image, ( c*t_fast/2 - R_0 ) / cosd(40), spd*T_slow, "log", 60);
 xlabel("Cross-range [m]");
-ylabel("GRP range [m]");
+ylabel("Ground range [m]");
 axis equal;
