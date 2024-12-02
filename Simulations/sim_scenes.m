@@ -2,8 +2,7 @@ clear;
 c= 299729458;
 k = 1.3086e-23;
 
-scene = "midterm";
-% scene = "rit"
+scene = "rit";
 
 switch scene
     case "hw4"
@@ -58,18 +57,29 @@ switch scene
 
         targets.X_aN = [0; L_0; 0] + [-50 -50 0 50; 50 -50 0 50; 0 0 0 0];
         targets.sig_N = [1 1 1 1];
-    % case "rit"
-    %
-    %     h = 20;
-    %     L_0 = 75;
-    %     L_min = 50;
-    %     L_max = 100;
-    %     S_min = -5;
-    %     S_max = 5;
-    %     spd = 0.1;
-    %
-    %     target.X_aN = [-50 -50 0 50; 50 -50 0 50; 0 0 0 0];
-    %     targets.sig_1N = [1 1 1 1];
+    case "rit"
+        f_c = 3.2e9;
+        tau = 150e-9;
+        B = 200e6;
+        f_s = 2 ^ nextpow2(1.2*B);
+        F_prf = 100;
+
+        D_az = 0.1;
+        D_el = 0.1;
+        eff = 0.2;
+
+        h = 20;
+        L_0 = 75;
+        L_min = 50;
+        L_max = 100;
+        S_min = -5;
+        S_max = 5;
+        spd = 0.1;
+
+        targets.X_aN = [0; L_0; 0] + [-2.5 -2.5 0 2.5 7.5; 2.5 -2.5 0 2.5 0; 0 0 0 0 0];
+        targets.sig_N = [1 1 1 1 1];
+        
+    case "rit_extended"
         
     otherwise 
         error("Scene not defined")
@@ -120,6 +130,7 @@ view([45 20]);
 
 [samples_tT, t_fast, T_slow, aux] = simulate_phase_history(radar, aperture, targets);
 
+cgain = db20(B*tau);
 figure(name = "Raw phase history");
 phplot(samples_tT, 1e6*t_fast, T_slow, "re");
 xlabel("Slow-time [s]");
@@ -131,14 +142,14 @@ ylabel("Fast-time [\mu s]");
 figure(name = "Intermediate results");
 tiledlayout(1,2);
 nexttile;
-phplot(interms.range_compressed_tT, 1e6*t_fast, T_slow, "log", db20(125));
+phplot(interms.range_compressed_tT, 1e6*t_fast, T_slow, "log", cgain);
 xlabel("Slow-time [s]");
 ylabel("Fast-time [\mu s]");
 title("Range-compressed phase history");
 
 nexttile;
 phplot(interms.rangedop_tF, 1e6*t_fast, ...
-    freqaxis(F_prf, size(interms.rangedop_tF, 2)), "log", db20(125));
+    freqaxis(F_prf, size(interms.rangedop_tF, 2)), "log", cgain);
 xlabel("Doppler [Hz]");
 ylabel("Fast-time [\mu s]");
 title("Range-Doppler map")
@@ -156,7 +167,7 @@ xlabel("Slow-time [s]"); ylabel("Gain [dB]");
 title("Antenna gain");
 
 figure(name = "Azimuth compressed phase history");
-phplot(synth_image, ( c*t_fast/2 - R_0 ) / cosd(40), spd*T_slow, "log", db20(125));
+phplot(synth_image, ( c*t_fast/2 - R_0 ) / cosd(40), spd*T_slow, "log", cgain);
 xlabel("Cross-range [m]");
 ylabel("Ground range [m]");
 axis equal;
