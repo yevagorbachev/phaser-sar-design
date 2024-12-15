@@ -35,6 +35,7 @@ PRF_max = 1 / ((2*max_range/c) + PW_max);
 f_c = 3.2e9; % [Hz] center frequency
 lam_c = c/f_c; % [m] wavelength
 BW = 200e6; % [Hz] bandwidth
+% BW = 400e6; % [Hz] bandwidth
 
 %% Aperture parameters
 % Performance metrics

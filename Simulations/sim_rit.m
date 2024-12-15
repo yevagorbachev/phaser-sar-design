@@ -62,6 +62,15 @@ view([45 20]);
 
 [samples_tT, t_fast, T_slow, aux] = simulate_phase_history(radar, aperture, targets);
 
+figure(name = "Raw phase history");
+tiledlayout(1,2);
+
+nexttile;
+phplot(samples_tT, 1e9*t_fast, T_slow, "re");
+xlabel("Slow-time [s]");
+ylabel("Fast-time [ns]");
+title("Clean data");
+
 amps = cable + fmam1087 + cable + fmam63018 + cable + fmam63018 + cable;
 P_dB = P_tx_radio_dBm + sum(amps.stages.gain) - 30;
 samples_tT = samples_tT * mag20(P_dB);
@@ -73,13 +82,16 @@ make_noise = memoize(@wgn);
 noise_tT = make_noise(size(samples_tT, 1), size(samples_tT, 2), db10(P_n), "complex");
 samples_tT = samples_tT + noise_tT;
 
-%% Process phase history
-
-cgain = db20(radar.B*radar.tau);
-figure(name = "Raw phase history");
+nexttile;
 phplot(samples_tT, 1e9*t_fast, T_slow, "re");
 xlabel("Slow-time [s]");
 ylabel("Fast-time [ns]");
+title("Noisy data");
+
+%% Process phase history
+
+% cgain = db20(radar.B*radar.tau);
+cgain = Inf;
 
 [synth_image, interms] = ifp_rda(samples_tT, t_fast, radar.B, radar.tau, ...
     T_slow, spd, R_0, radar.lambda);
@@ -112,7 +124,35 @@ xlabel("Slow-time [s]"); ylabel("Gain [dB]");
 title("Antenna gain");
 
 figure(name = "Azimuth compressed phase history");
-phplot(synth_image, ( c*t_fast/2 - R_0 ) / cos(grazing), spd*T_slow, "log", cgain);
+
+tiledlayout(1,2);
+
+nexttile;
+phplot(synth_image, ( c*t_fast/2 - R_0 ) / cos(grazing), spd*T_slow, "abs");
 xlabel("Cross-range [m]");
+xlim(spd*T_slow([1 end]));
 ylabel("Ground range [m]");
 axis equal;
+title("Linear scale");
+
+nexttile;
+phplot(synth_image, ( c*t_fast/2 - R_0 ) / cos(grazing), spd*T_slow, "log", cgain);
+xlabel("Cross-range [m]");
+xlim(spd*T_slow([1 end]));
+ylabel("Ground range [m]");
+axis equal;
+title("Log scale");
+
+% samp_ranges = c*t_fast/2;
+% samp_xranges = x_positions;
+% [binned_rx, ranges, xranges] = bin_samples(samples_tT, samp_ranges, ...
+%     samp_xranges, range_res, xrange_res);
+%
+% nexttile;
+% phplot(binned_rx, ranges, xranges, "log");
+% xlabel("Cross-range [m]");
+% xlim(spd*T_slow([1 end]));
+% ylabel("Ground range [m]");
+% axis equal;
+% title("Binned energies");
+

@@ -29,7 +29,6 @@ function [samples_tT, t_fast, T_slow, aux] = simulate_phase_history(radar, apert
     t_tx_t = (0:(1/radar.f_s):radar.tau)' - radar.tau/2;
     t_tgt_1TN = range2time(R_tgt_1TN);
 
-    t_tgt_1TN = 2*R_tgt_1TN/c;
     % sample-justify received signal timing
     t_samp_tTN = floor(t_tgt_1TN * radar.f_s) / radar.f_s + t_tx_t - t_tgt_1TN;
     % calculate received signal destination indicies
