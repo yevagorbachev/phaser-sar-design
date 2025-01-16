@@ -14,12 +14,9 @@
 
 function [samples_tT, t_fast, T_slow, aux] = simulate_phase_history(radar, aperture, targets)
     c = 299792458;
-    k = 1.3806e-23;
-    time2range = @(t) c/2*t;
     range2time = @(r) 2/c*r;
 
     % Calculate geometry
-    N_targets = length(targets.sig_N);
     x_tgt_a1N = permute(targets.X_aN, [1 3 2]); % permute for broadcasting
     sig_tgt_11N = permute(targets.sig_N(:), [2 3 1]); % permute for broadcasting
     r_tgt_aTN = aperture.X_aT - x_tgt_a1N; % displacement platform-to-target
@@ -39,7 +36,6 @@ function [samples_tT, t_fast, T_slow, aux] = simulate_phase_history(radar, apert
     t_max = max(aperture.t_max, i_rx_max/radar.f_s + aperture.t_min);
 
     t_fast = (aperture.t_min:(1/radar.f_s):t_max)';
-    R_t = time2range(t_fast);
     n_fast = length(t_fast);
 
     N_slow = size(aperture.X_aT, 2);

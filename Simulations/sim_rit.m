@@ -1,5 +1,6 @@
 %% Define parameters and generate aperture
 clear;
+set(groot, "DefaultAxesNextPlot", "add");
 link_budget;
 
 h = platform_height;
@@ -14,10 +15,6 @@ radar.lambda = c/f_c;
 radar.tau = PW;
 radar.B = BW;
 radar.f_s = 2^nextpow2(1.2*BW);
-
-D_az = 0.1;
-D_el = 0.1;
-eff = 0.2;
 
 aperture.F_prf = F_prf;
 x_positions = S_min:(spd/F_prf):S_max;
@@ -71,7 +68,7 @@ xlabel("Slow-time [s]");
 ylabel("Fast-time [ns]");
 title("Clean data");
 
-amps = cable + fmam1087 + cable + fmam63018 + cable + fmam63018 + cable;
+amps = adl8107;
 P_dB = P_tx_radio_dBm + sum(amps.stages.gain) - 30;
 samples_tT = samples_tT * mag20(P_dB);
 

@@ -32,10 +32,9 @@ PW_max = (2*min_range/c) /2;
 PRF_max = 1 / ((2*max_range/c) + PW_max);
 
 %% Frequency allocation
-f_c = 3.2e9; % [Hz] center frequency
+f_c = 10.25e9; % [Hz] center frequency
 lam_c = c/f_c; % [m] wavelength
-BW = 200e6; % [Hz] bandwidth
-% BW = 400e6; % [Hz] bandwidth
+BW = 500e6; % [Hz] bandwidth
 
 %% Aperture parameters
 % Performance metrics
@@ -57,27 +56,24 @@ G_chirp_dB = db20(PW * BW); % Pulse compression gain
 G_path_dB = db10(lam_c^2 / ((4*pi)^3 * range^4));
 % Two-way Friis without G or P
 
-%% Radio Parameters
-% if make_radio_data or x440_data are modified, use clearCache(load_radio_data) to refresh.
-load_radio_data = memoize(@make_radio_data); % so that repeated runs use cached results
-radio_data = load_radio_data(proj_file("Data", "x440_data.xlsx"));
-
-P_tx_radio_dBm = -27;
-N_thermal_dBm = db10(k*T*BW) + 30; % dBW to dBm
-N_radio_dBm = radio_data.rx_noise_psd(f_c) + db10(BW);
-NF_radio_dB = N_radio_dBm - N_thermal_dBm;
-
 %% Hardware parameters
-NF_amp_dB = 3 * 3; % [dB] Three 3dB amplifier stages
-L_coax_dB = 6 * 1; % [dB] insertion loss of 6 coaxial cables
-VSWR = 2;
-refl = (VSWR - 1) / (VSWR + 1);
-L_swr_dB = -db10(1 - refl^2); % Antenna SWR mismatch
+% Assuming radio is steered to mechanical boresight
+rx_amplifier_dB = 24;
+array_gain_dB = -10;
+array_gain = mag10(array_gain_dB);
 
-L_total = L_coax_dB + L_swr_dB;
+D_az = 8*(lam_c/2); % 8 elements at lambda/2
+D_el = 4*(lam_c/2); % 8 elements at lambda/2
+eff = array_gain * lam_c^2 / (4*pi*D_az*D_el);
 
+P_tx_radio_dBm = 7;
+L_total_dB = 5;
+
+N_thermal_dBm = db10(k*PW*BW) + 30;
+NF_radio_dB = 3;
+NF_amp_dB = 3;
 %% Required Link Budget
-P_rx_radio_req_dBm = 10 + radio_data.rx_fs(f_c) - db20(2^12);
+P_rx_radio_req_dBm = -90;
 
 signal_budget = table(Size = [0 3], ...
     VariableTypes = ["string", "double", "string"], ...
@@ -86,11 +82,12 @@ noise_budget = table(Size = [0 3], ...
     VariableTypes = ["string", "double", "string"], ...
     VariableNames = ["Parameter", "Value", "Unit"]);
 
-% signal_budget(end+1, :) = {"Required return", P_rx_radio_req_dBm, "dBm"};
 signal_budget(end+1, :) = {"Transmit power", P_tx_radio_dBm, "dBm"};
 signal_budget(end+1, :) = {"Path loss", G_path_dB, "dB"};
 signal_budget(end+1, :) = {"Target RCS", target_rcs_dBsm, "dBsm"};
-signal_budget(end+1, :) = {"Receiver losses", -L_total, "dB"};
+signal_budget(end+1, :) = {"Receiver LNA", rx_amplifier_dB, "dB"};
+signal_budget(end+1, :) = {"Receiver array gain", array_gain_dB, "dB"};
+signal_budget(end+1, :) = {"Receiver losses", -L_total_dB, "dB"};
 signal_budget(end+1, :) = {"Required gain", ...
     P_rx_radio_req_dBm - sum(signal_budget.Value(1:end)),"dB"};
 
@@ -116,19 +113,12 @@ target = gainblock(name = "Target", gain = target_rcs_dBsm);
 % Components
 % Amplifier data read from datasheet plots at ~3.2 GHz
 cable = gainblock(name = "Coaxial cable", gain = -1);
-fmam1087 = gainblock(name = "FMAM1087", gain = 59, ...
-    P_sat = 18, P_max = -2, NF = 1.4);
-fmam63018 = gainblock(name = "FMAM63018", gain = 33, ...
-    p_sat = 14.5, p_max = 30, NF = 3.2);
-aaronia = gainblock(name = "HyperLOG 7040", gain = 4, ...
-    P_sat = db10(50e3), P_max = db10(50e3));
-lcom = gainblock(name = "Parabolic mesh", gain = 22, ...
-    P_sat = db10(50e3), P_max = db10(50e3));
+cn0566 = gainblock(name = "CN0566", gain = array_gain_dB);
+adl8107 = gainblock(name = "ADL8107", gain = rx_amplifier_dB);
+tx_ant = gainblock(name = "WR-62", gain = 20);
 
-% Links
-ant = aaronia;
-tx = cable + fmam63018 + cable + ant;
-rx = ant + cable + fmam1087 + cable + fmam63018 + cable;
+tx = cable + tx_ant;
+rx = cn0566 + adl8107 + cable;
 link = tx + freespace + target + rx;
 
 [P_signal, nf] = link.snr(P_tx_radio_dBm);
