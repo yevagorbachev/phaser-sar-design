@@ -30,15 +30,16 @@ classdef gainblock
     end
 
     methods (Access = public)
-        % Construct gainblock
-        % gb = gainblock(name, gain, p_sat, p_max, NF)
-        % name [str]    display name 
-        % gain [dB]     small-signal gain 
-        % p_sat [dBm]   saturated power 
-        % p_max [dBm]   maximum input power 
-        % All arguments may be supplied as vectors to represent several stages,
-        % provided that they have the same length.
         function gb = gainblock(params)
+            % Construct gainblock
+            % gb = gainblock(name, gain, p_sat, p_max, NF)
+            % name [str]    display name 
+            % gain [dB]     small-signal gain 
+            % p_sat [dBm]   saturated power 
+            % p_max [dBm]   maximum input power 
+            % NF [dB]       Noise figure
+            % All arguments may be supplied as vectors to represent several stages,
+            % provided that they have the same length.
             arguments
                 params.name (1,:) string = "";
                 params.gain (1,:) double;

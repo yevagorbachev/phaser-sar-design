@@ -46,6 +46,7 @@ v = 0.1; % [m/s] platform velocity
 PW = 150e-9; % [s] pulse width
 B_dop = 2*v/lam_c; % [s] Doppler bandwidth without accounting for beam (forward/backward)
 F_prf_min = B_dop*1.4; % [Hz] pulse rep. frequency
+% F_prf = 2*B_dop;
 F_prf = 100;
 T_CPI = aperture_width / v; % [s] Coherent processing time
 % NOTE: Signal processing gains are db20 because they are voltage-like
@@ -57,23 +58,30 @@ G_path_dB = db10(lam_c^2 / ((4*pi)^3 * range^4));
 % Two-way Friis without G or P
 
 %% Hardware parameters
-% Assuming radio is steered to mechanical boresight
-rx_amplifier_dB = 24;
-array_gain_dB = -10;
-array_gain = mag10(array_gain_dB);
+rx_amplifier_dB = 24; % ADL8107 typical gain [Datasheet Rev B page 1]
+rx_amplifier_NF_dB = 1.3; % ADL8107 typical NF [Datasheet Rev B page 1]
 
+tx_amplifier_dB = 24; % ADL8107 typical gain [Datasheet Rev B page 1]
+tx_amplifier_NF_dB = 1.3; % ADL8107 typical NF [Datasheet Rev B page 1]
+
+array_gain_dB = -10; % CN0566 onboard antenna gain [Circuit Note Rev 0 page 5]
+
+NF_radio_dB = 3; % AD9363 NF at 2.4 GHz [Datasheet Rev D page 24]
+P_tx_radio_dBm = 7.5; % AD9363 Tx power at 2.4 GHz [Datasheet Rev D page 25]
+P_rx_radio_req_dBm = -90; % [CN0566 Circuit Note Rev 0 page 6, Figure 11]
+% Minimum reading on the "receive signal path measurements"
+
+L_total_dB = 5; % Wild guess
+
+% Efficiency calculation
+array_gain = mag10(array_gain_dB);
 D_az = 8*(lam_c/2); % 8 elements at lambda/2
 D_el = 4*(lam_c/2); % 8 elements at lambda/2
 eff = array_gain * lam_c^2 / (4*pi*D_az*D_el);
 
-P_tx_radio_dBm = 7;
-L_total_dB = 5;
-
 N_thermal_dBm = db10(k*PW*BW) + 30;
-NF_radio_dB = 3;
-NF_amp_dB = 3;
+
 %% Required Link Budget
-P_rx_radio_req_dBm = -90;
 
 signal_budget = table(Size = [0 3], ...
     VariableTypes = ["string", "double", "string"], ...
@@ -83,6 +91,7 @@ noise_budget = table(Size = [0 3], ...
     VariableNames = ["Parameter", "Value", "Unit"]);
 
 signal_budget(end+1, :) = {"Transmit power", P_tx_radio_dBm, "dBm"};
+signal_budget(end+1, :) = {"Transmitter LNA", tx_amplifier_dB, "dBm"};
 signal_budget(end+1, :) = {"Path loss", G_path_dB, "dB"};
 signal_budget(end+1, :) = {"Target RCS", target_rcs_dBsm, "dBsm"};
 signal_budget(end+1, :) = {"Receiver LNA", rx_amplifier_dB, "dB"};
@@ -97,7 +106,7 @@ signal_budget(end+1, :) = {"Signal power", sum(signal_budget.Value), "dBm"};
 
 noise_budget(end+1, :) = {"Thermal base (kTB)", N_thermal_dBm, "dBm"};
 noise_budget(end+1, :) = {"Radio NF", NF_radio_dB, "dB"};
-noise_budget(end+1, :) = {"3x amplifier NF", NF_amp_dB, "dB"};
+noise_budget(end+1, :) = {"2x ADL8107 NF", 2*rx_amplifier_NF_dB, "dB"};
 P_noise = sum(noise_budget.Value);
 noise_budget(end+1, :) = {"Noise power", P_noise, "dBm"};
 
@@ -114,10 +123,10 @@ target = gainblock(name = "Target", gain = target_rcs_dBsm);
 % Amplifier data read from datasheet plots at ~3.2 GHz
 cable = gainblock(name = "Coaxial cable", gain = -1);
 cn0566 = gainblock(name = "CN0566", gain = array_gain_dB);
-adl8107 = gainblock(name = "ADL8107", gain = rx_amplifier_dB);
+adl8107 = gainblock(name = "ADL8107", gain = rx_amplifier_dB, NF = rx_amplifier_NF_dB);
 tx_ant = gainblock(name = "WR-62", gain = 20);
 
-tx = cable + tx_ant;
+tx = cable + adl8107 + tx_ant;
 rx = cn0566 + adl8107 + cable;
 link = tx + freespace + target + rx;
 
