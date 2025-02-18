@@ -66,72 +66,53 @@ tx_amplifier_NF_dB = 1.3; % ADL8107 typical NF [Datasheet Rev B page 1]
 
 array_gain_dB = -10; % CN0566 onboard antenna gain [Circuit Note Rev 0 page 5]
 
-NF_radio_dB = 3; % AD9363 NF at 2.4 GHz [Datasheet Rev D page 24]
+% NOTE PE9856B doesn't list beamwidth, PEWAN090 looks similar and has same gain
+horn_gain_dB = 10; % PE9856B-SF-10
+horn_azbw = deg2rad(52.1); % PEWAN090-10SM 
+horn_elbw = deg2rad(51.6); % PEWAN090-10SM 
+
+radio_amplifier_dB = 70; % AD9363 Rx gain at 2.4 GHz [Datasheet Rev D page 24]
+radio_NF_dB = 3; % AD9363 NF at 2.4 GHz [Datasheet Rev D page 24]
 P_tx_radio_dBm = 7.5; % AD9363 Tx power at 2.4 GHz [Datasheet Rev D page 25]
-P_rx_radio_req_dBm = -90; % [CN0566 Circuit Note Rev 0 page 6, Figure 11]
-% Minimum reading on the "receive signal path measurements"
 
-L_total_dB = 5; % Wild guess
+L_total_dB = 3; % Wild guess
 
-% Efficiency calculation
+% Back-out Tx parameters
+% solve numerically for D_az/el giving correct HPBW
+% using Daz/el and gain, solve for efficiency
+D_az_tx = fzero(@(Dl) sinc((Dl / lam_c) * (horn_azbw/2)).^2 - 0.5, ...
+    lam_c / horn_azbw);
+D_el_tx = fzero(@(Dl) sinc((Dl / lam_c) * (horn_elbw/2)).^2 - 0.5, ...
+    lam_c / horn_elbw);
+eff_tx = (mag10(horn_gain_dB) * lam_c^2) / (4*pi*D_az_tx*D_el_tx);
+% Back-out Rx parameters
+
 array_gain = mag10(array_gain_dB);
-D_az = 8*(lam_c/2); % 8 elements at lambda/2
-D_el = 4*(lam_c/2); % 8 elements at lambda/2
-eff = array_gain * lam_c^2 / (4*pi*D_az*D_el);
+D_az_rx = 8*(lam_c/2); % 8 elements at lambda/2
+D_el_rx = 4*(lam_c/2); % 8 elements at lambda/2
+eff_rx = array_gain * lam_c^2 / (4*pi*D_az_rx*D_el_rx);
 
-N_thermal_dBm = db10(k*PW*BW) + 30;
+N_thermal_dBm = db10(k*T*BW) + 30;
 
-%% Required Link Budget
-
-signal_budget = table(Size = [0 3], ...
-    VariableTypes = ["string", "double", "string"], ...
-    VariableNames = ["Parameter", "Value", "Unit"]);
-noise_budget = table(Size = [0 3], ...
-    VariableTypes = ["string", "double", "string"], ...
-    VariableNames = ["Parameter", "Value", "Unit"]);
-
-signal_budget(end+1, :) = {"Transmit power", P_tx_radio_dBm, "dBm"};
-signal_budget(end+1, :) = {"Transmitter LNA", tx_amplifier_dB, "dBm"};
-signal_budget(end+1, :) = {"Path loss", G_path_dB, "dB"};
-signal_budget(end+1, :) = {"Target RCS", target_rcs_dBsm, "dBsm"};
-signal_budget(end+1, :) = {"Receiver LNA", rx_amplifier_dB, "dB"};
-signal_budget(end+1, :) = {"Receiver array gain", array_gain_dB, "dB"};
-signal_budget(end+1, :) = {"Receiver losses", -L_total_dB, "dB"};
-signal_budget(end+1, :) = {"Required gain", ...
-    P_rx_radio_req_dBm - sum(signal_budget.Value(1:end)),"dB"};
-
-signal_budget(end+1, :) = {"Pulse compression", G_chirp_dB, "dB"};
-signal_budget(end+1, :) = {"Coherent processing", G_CPI_dB, "dB"};
-signal_budget(end+1, :) = {"Signal power", sum(signal_budget.Value), "dBm"};
-
-noise_budget(end+1, :) = {"Thermal base (kTB)", N_thermal_dBm, "dBm"};
-noise_budget(end+1, :) = {"Radio NF", NF_radio_dB, "dB"};
-noise_budget(end+1, :) = {"2x ADL8107 NF", 2*rx_amplifier_NF_dB, "dB"};
-P_noise = sum(noise_budget.Value);
-noise_budget(end+1, :) = {"Noise power", P_noise, "dBm"};
-
-disp(signal_budget);
-disp(noise_budget);
-
-%% Physical Hardware
+%% Hardware
 
 % Environment effects
 freespace = gainblock(name = "Free space", gain = G_path_dB);
 target = gainblock(name = "Target", gain = target_rcs_dBsm);
 
 % Components
-% Amplifier data read from datasheet plots at ~3.2 GHz
 cable = gainblock(name = "Coaxial cable", gain = -1);
-cn0566 = gainblock(name = "CN0566", gain = array_gain_dB);
+cn0566 = gainblock(name = "PHASER", gain = array_gain_dB);
 adl8107 = gainblock(name = "ADL8107", gain = rx_amplifier_dB, NF = rx_amplifier_NF_dB);
-tx_ant = gainblock(name = "WR-62", gain = 20);
+ad9363 = gainblock(name = "PLUTO", gain = 70, NF = radio_NF_dB);
+wr90 = gainblock(name = "PEWAN090-10SM", gain = horn_gain_dB);
 
-tx = cable + adl8107 + tx_ant;
-rx = cn0566 + adl8107 + cable;
+tx = cable + adl8107 + cable + wr90;
+rx = cn0566 + adl8107 + cable + ad9363;
 link = tx + freespace + target + rx;
 
 [P_signal, nf] = link.snr(P_tx_radio_dBm);
-P_noise = N_thermal_dBm + NF_radio_dB + nf;
+P_noise = N_thermal_dBm + nf;
 
 disp(link);
 fprintf("Actual hardware powers:\n");
