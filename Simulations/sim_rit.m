@@ -1,143 +1,133 @@
 %% Define parameters and generate aperture
 clear;
-set(groot, "DefaultAxesNextPlot", "add");
 link_budget;
 
-h = platform_height;
-S_min = -aperture_width/2;
-S_max = aperture_width/2;
-L_0 = mean([min_range max_range]);
-L_min = min_range;
-L_max = max_range;
-spd = v;
+set(groot, "DefaultAxesNextPlot", "add");
+plot_laydown = true;
+plot_raw = true;
+plot_real = true;
+plot_result = true;
 
-radar.lambda = c/f_c;
-radar.tau = PW;
-radar.B = BW;
-radar.f_s = 2^nextpow2(1.2*BW);
+radar.wavelength = lam_c;
+[radar.pulse, radar.sample_freq] = idealLFM(BW, PW);
 
-aperture.F_prf = F_prf;
-x_positions = S_min:(spd/F_prf):S_max;
-aperture.X_aT = [x_positions; zeros(size(x_positions)); repmat(h, size(x_positions))];
-aperture.V_aT = [spd; 0; 0];
-aperture.t_min = 2*sqrt(L_min^2 + h^2)/c;
-aperture.t_max = 2*sqrt(L_max^2 + h^2)/c;
+aperture.X_range = aperture_width * [-1/2 1/2];
+aperture.L_range = [min_range, max_range];
+[aperture.platform_position, aperture.platform_velocity, ...
+    aperture.platform_look, aperture.t_range, aperture.T_range] = ...
+    ap_stripmap(platform_height, aperture.X_range, aperture.L_range, v, F_prf);
 
-R_0 = sqrt(h^2 + mean([L_min L_max]).^2);
-grazing = atan(h / (mean([L_min L_max])));
+aperture.tx_antenna_gain = ant_rectangular([D_az_tx, D_el_tx] / lam_c, eff_tx);
+aperture.rx_antenna_gain = ant_rectangular([D_az_rx, D_el_rx] / lam_c, eff_rx);
 
-aperture.look_aaT = [1 0 0;
-    0 cos(grazing) -sin(grazing); 
-    0 sin(grazing) cos(grazing)];
+aperture.grp_posn = [0; mean([min_range, max_range]); 0];
+targets.target_position = grp_targets(aperture.grp_posn, [0 0], [-1.5 0], [7.5 0]);
+targets.target_RCS = [1 1 1];
 
-aperture.G_ant = @(sin_az, sin_el) 4*pi*D_az*D_el*eff/radar.lambda.^2 * ...
-    sinc(D_az / radar.lambda * sin_az) .^ 2 .* ...
-    sinc(D_el / radar.lambda * sin_el) .^ 2;
+if plot_laydown
+    figure(name = "Laydown");
 
-targets.X_aN = [0; L_0; 0] + [-2.5 -2.5 0 2.5 7.5; 2.5 -2.5 0 2.5 0; 0 0 0 0 0];
-targets.sig_N = [1 1 1 1 1];
-        
-%% Simulate scene
-figure(name = "3D view");
-for ti = 1:size(targets.X_aN, 2)
-    plot3(targets.X_aN(1, ti), targets.X_aN(2, ti), targets.X_aN(3, ti), ...
-        "+", LineWidth = 2, DisplayName = sprintf("Target %d", ti));
+    for i_tgt = size(targets.target_position, 2)
+        plot3(targets.target_position(1, i_tgt), ...
+            targets.target_position(2, i_tgt), ...
+            targets.target_position(3, i_tgt), ...
+            "+", LineWidth = 1.5, DisplayName = sprintf("Target %d", i_tgt));
+    end
+
+    plot3(aperture.platform_position(1, :), ...
+        aperture.platform_position(2, :), ...
+        aperture.platform_position(3, :), ...
+        "-r", LineWidth = 1.5, DisplayName = "Aperture");
+
+    xlabel("Coss-range [m]");
+    ylabel("Range [m]");
+    zlabel("Altitude [m]");
+    legend;
+    view([45 20]);
+    daspect([1 1 1]);
+
+    figure(name = "Antenna patterns")
+    layout = tiledlayout(1,2);
+    sgtitle("Antenna patterns");
+
+    angle_max = deg2rad(30); 
+    angles = linspace(-angle_max, angle_max, 100);
+
+    ax_az = nexttile(1);
+    title("Azimuth");
+    plot(rad2deg(angles), db10(aperture.tx_antenna_gain(angles, 0)), DisplayName = "Transmit");
+    plot(rad2deg(angles), db10(aperture.rx_antenna_gain(angles, 0)), DisplayName = "Receive");
+    legend(Location = "northoutside", Orientation = "horizontal");
+    ylabel("Gain [dB]");
+    xlabel("Azimuth angle [deg]");
+
+    ax_el = nexttile(2);
+    title("Elevation");
+    plot(rad2deg(angles), db10(aperture.tx_antenna_gain(0, angles)), DisplayName = "Transmit");
+    plot(rad2deg(angles), db10(aperture.rx_antenna_gain(0, angles)), DisplayName = "Receive");
+    legend(Location = "northoutside", Orientation = "horizontal");
+    xlabel("Elevation angle [deg]");
+
+    linkaxes([ax_az, ax_el], "y");
+    ylim([ax_az.YLim(2) - 50, ax_az.YLim(2)]);
+    layout.TileSpacing = "compact";
 end
-plot3(aperture.X_aT(1, :), aperture.X_aT(2, :), aperture.X_aT(3, :), ...
-    "-k", DisplayName = "Aperture");
-ground_area = [S_min S_min S_max S_max S_min; 
-    L_min L_max L_max L_min L_min; 
-    0 0 0 0 0];
-plot3(ground_area(1, :), ground_area(2, :), ground_area(3, :),...
-    "--k", HandleVisibility = "off");
 
-xlabel("Coss-range [m]");
-ylabel("Range [m]");
-zlabel("Altitude [m]");
-legend;
-view([45 20]);
+[samples, t_fast, T_slow] = simulate_phase_history(radar, aperture, targets);
+amps = adl8107 + adl8107 + hmc451;
+gn = amps.gain + 50;
+samples = samples .* gn;
 
-[samples_tT, t_fast, T_slow, aux] = simulate_phase_history(radar, aperture, targets);
+if plot_raw
+    figure(name = "Raw phase history");
+    title("Simulated phase");
+    phplot(samples, 1e9*t_fast, T_slow, "re");
+    xlabel("Slow-time [s]");
+    ylabel("Fast-time [ns]");
+end
 
-figure(name = "Raw phase history");
-tiledlayout(1,2);
+noise = wgn(size(samples,1), size(samples,2), N_thermal_dBm - 30, "complex");
+samples = samples + noise;
 
-nexttile;
-phplot(samples_tT, 1e9*t_fast, T_slow, "re");
+figure(name = "Noisy phase history");
+title("Simulated phase");
+phplot(samples, 1e9*t_fast, T_slow, "re");
 xlabel("Slow-time [s]");
 ylabel("Fast-time [ns]");
-title("Clean data");
 
-amps = adl8107 + adl8107;
-P_dB = P_tx_radio_dBm + sum(amps.stages.gain) - array_gain_dB + 10 - 30;
-samples_tT = samples_tT * mag20(P_dB);
+[synth_image, interms] = ifp_rda(samples, t_fast, radar.pulse, radar.sample_freq, ...
+    T_slow, v, sqrt(platform_height.^2 + (min_range + max_range)^2/4), radar.wavelength);
 
-B_n = radar.f_s;
-P_n = P_noise;
-
-% make_noise = memoize(@wgn);
-% noise_tT = make_noise(size(samples_tT, 1), size(samples_tT, 2), db10(P_n), "complex");
-% samples_tT = samples_tT + noise_tT;
-
-nexttile;
-phplot(samples_tT, 1e9*t_fast, T_slow, "re");
-xlabel("Slow-time [s]");
-ylabel("Fast-time [ns]");
-title("Noisy data");
-
-%% Process phase history
-
-% cgain = db20(radar.B*radar.tau);
-cgain = Inf;
-
-[synth_image, interms] = ifp_rda(samples_tT, t_fast, radar.B, radar.tau, ...
-    T_slow, spd, R_0, radar.lambda);
-
+dynr = db20(BW * PW) + 10;
 figure(name = "Intermediate results");
 tiledlayout(1,2);
 nexttile;
-phplot(interms.range_compressed_tT, 1e9*t_fast, T_slow, "log", cgain);
+phplot(interms.range_compressed, 1e9*t_fast, T_slow, "log", dynr);
 xlabel("Slow-time [s]");
 ylabel("Fast-time [ns]");
 title("Range-compressed phase history");
 
 nexttile;
-phplot(interms.rangedop_tF, 1e9*t_fast, ...
-    freqaxis(F_prf, size(interms.rangedop_tF, 2)), "log", cgain);
+phplot(interms.rangedop, 1e9*t_fast, ...
+    freqaxis(F_prf, size(interms.rangedop, 2)), "log");
 xlabel("Doppler [Hz]");
 ylabel("Fast-time [ns]");
 title("Range-Doppler map")
-
-figure(name = "Target modulation")
-tiledlayout(2,1)
-nexttile;
-plot(T_slow, aux.F_dop);
-xlabel("Slow-time [s]"); ylabel("Doppler [Hz]");
-title("Doppler trajectories")
-
-nexttile;
-plot(T_slow, db10(aux.G_ant));
-xlabel("Slow-time [s]"); ylabel("Gain [dB]");
-title("Antenna gain");
 
 figure(name = "Azimuth compressed phase history");
 
 tiledlayout(1,2);
 
 nexttile;
-phplot(synth_image, ( c*t_fast/2 - R_0 ) / cos(grazing), spd*T_slow, "abs");
+phplot(synth_image, t_fast, T_slow, "abs");
 xlabel("Cross-range [m]");
-xlim(spd*T_slow([1 end]));
 ylabel("Ground range [m]");
-axis equal;
 title("Linear scale");
 
 nexttile;
-phplot(synth_image, ( c*t_fast/2 - R_0 ) / cos(grazing), spd*T_slow, "log", cgain);
+phplot(synth_image, t_fast, T_slow, "log");
 xlabel("Cross-range [m]");
-xlim(spd*T_slow([1 end]));
 ylabel("Ground range [m]");
-axis equal;
 title("Log scale");
 
 % samp_ranges = c*t_fast/2;

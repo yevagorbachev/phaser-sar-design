@@ -1,24 +1,30 @@
-function [samples_cC, interms] = ifp_rda(samples_tT, t_fast, B, tau, ...
+function [samples_cC, interms] = ifp_rda(samples, t_fast, s_tx, f_s, ...
     T_slow, spd, R_0, lambda)
+    
+    % Form image using Range-Doppler Algorithm
+    % INPUTS (T - number of slow-time samples, t - number of fast-time samples)
+    %   samples     (T by t)    phase history
+    %   t_fast      (1 by t)    fast times
+    %   s_tx        (1 by t)    transmitted pulse
+    %   f_s         (1 by 1)    sample frequency
     c = 299792458;
-    [N_range, N_cross] = size(samples_tT);
+    [N_range, N_cross] = size(samples);
 
-    f_s = 1/(t_fast(2) - t_fast(1));
     F_prf = 1/(T_slow(2) - T_slow(1));
-    K_r = B/tau;
+    % K_r = B/tau;
     K_a = 2*spd^2/(lambda*R_0);
 
     wb = waitbar(0, "Range-Doppler processing");
+    oc = onCleanup(@() close(wb));
 
-    t_tx = (0:(1/f_s):tau)';
-    range_chirp = exp(1j*pi*K_r*(t_tx - tau/2).^2);
-    N_range_fft = N_range + length(range_chirp);
-    range_MF = fft(conj(range_chirp), N_range_fft); 
+    % t_tx = (0:(1/f_s):tau)';
+    N_range_fft = N_range + length(s_tx) - 1;
+    range_MF = fft(s_tx', N_range_fft);
 
     waitbar(0.25, wb, "Range compression");
-    samples_fT = fft(samples_tT, N_range_fft, 1);
+    samples_fT = fft(samples, N_range_fft, 1);
     samples_cT = ifft(samples_fT .* range_MF, N_range_fft, 1);
-    samples_cT = samples_cT((1:N_range) + floor(length(range_chirp)/2), :);
+    samples_cT = samples_cT((1:N_range) + floor(length(s_tx)/2), :);
     
     % RCMC
     waitbar(0.5, wb, "Range cell migration");
@@ -39,14 +45,14 @@ function [samples_cC, interms] = ifp_rda(samples_tT, t_fast, B, tau, ...
     % Doppler compression
     waitbar(0.75, wb, "Cross-range compression");
     samples_cC = ifft(ifftshift(samples_rcmc_cF .* cross_MF, 2), N_cross_fft, 2);
-    samples_cC = samples_cC(:, 1:N_cross);
+    % samples_cC = samples_cC(1:N_cross, 1);
 
     waitbar(1, wb, "Done");
-    close(wb);
+    delete(oc);
 
     if nargout == 2
-        interms.range_compressed_tT = samples_cT;
-        interms.rangedop_tF = samples_cF;
-        interms.rangedop_rcmc_tF = samples_rcmc_cF;
+        interms.range_compressed = samples_cT;
+        interms.rangedop = samples_cF;
+        interms.rangedop_rcmc = samples_rcmc_cF;
     end
 end
