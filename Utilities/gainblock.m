@@ -76,13 +76,13 @@ classdef gainblock
     methods (Access = public)
         % Find output power inclusive of saturations
         % Emit warning if maxima are exceeded
-        function [P_out, NF] = snr(gb, P_sig)
+        function P_out = transmit(gb, P_tx)
             arguments
                 gb gainblock;
-                P_sig double;
+                P_tx (1,1) double;
             end
 
-            P_out = P_sig;
+            P_out = P_tx;
             NF = 0;
             for i_st = 1:height(gb.stages) 
                 stage = gb.stages(i_st, :);
@@ -102,6 +102,14 @@ classdef gainblock
             % NOTE Deliberately not vectorized - unclear that it is possible to
             % consider effects of upstream saturation on downstream components 
         end
+
+        function g = gain(gb)
+            g = sum(gb.stages.gain);
+        end
+        function nf = nf(gb)
+            nf = sum(gb.stages.NF, "omitmissing");
+        end
+
     end
 end
 
