@@ -1,4 +1,4 @@
-function [x, v, look, t_range] = ap_stripmap(h, s_range, L_range, spd, F_prf)
+function [x, v, look, t_range, T_range] = ap_stripmap(h, s_range, L_range, spd, F_prf)
     % Create strip-map aperture parallel to +x
     % [x, v, look] = ap_stripmap(h, s_range, L_range, spd, F_prf)
     % INPUTS
@@ -13,10 +13,12 @@ function [x, v, look, t_range] = ap_stripmap(h, s_range, L_range, spd, F_prf)
     %   look        antenna direction cosines (3x3xN)
     %               u_tgt(ant) = look * u_tgt(world)
     %   t_range     fast-time window
+    %   T_range     slow-time window
 
     c = 299792458;
     [s_min, s_max] = bounds(s_range);
     x_positions = s_min:(spd/F_prf):s_max;
+    T_range = [min(x_positions), max(x_positions)] / spd;
     N = length(x_positions);
     x = [x_positions; zeros([1 N]); repmat(h, [1 N])];
     v = repmat([spd; 0; 0], [1 N]);
