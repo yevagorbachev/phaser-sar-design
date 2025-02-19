@@ -13,24 +13,6 @@ function im = phplot(data, row_labels, col_labels, im_mode, dy_range)
         dy_range (1,1) double {mustBePositive, mustBeReal} = Inf ;
     end
 
-    scales = dictionary;
-    labels = dictionary;
-
-    scales("log") = @(d) 20*log10(abs(d));
-    labels("log") = "Magnitude [dB]";
-    scales("abs") = @abs;
-    labels("abs") = "Magnitude [V]";
-    scales("re") = @real;
-    labels("re") = "I channel [V]";
-    scales("im") = @imag;
-    labels("im") = "Q channel [V]";
-    scales("ph") = @angle;
-    labels("ph") = "Angle [rad]";
-
-    if ~isKey(scales, im_mode)
-        error("Image scaling '%s' not recognized", im_mode);
-    end
-
     if size(row_labels, 1) ~= size(data, 1)
         error("Data and row labels have inconsistent sizes");
     end
@@ -38,8 +20,26 @@ function im = phplot(data, row_labels, col_labels, im_mode, dy_range)
         error("Data and column labels have inconsistent sizes");
     end
 
-    scaler = scales(im_mode);
-    label = labels(im_mode);
+    switch im_mode
+        case "log"
+            scaler = @(d) 20*log10(abs(d)); 
+            zlabel = "Magnitude [dB]";
+        case "abs"
+            scaler = @abs;
+            zlabel = "Magnitude [V]";
+        case "re"
+            scaler = @real;
+            zlabel = "I channel [V]";
+        case "im"
+            scaler = @imag;
+            zlabel = "Q channel [V]";
+        case "ph"
+            scaler = @angle;
+            zlabel = "Phase [rad]";
+        otherwise 
+            error("Image scaling '%s' not recognized", im_mode);
+    end
+
     data = scaler(data);
 
     dfloor = max(data, [], "all") - dy_range;
@@ -49,5 +49,6 @@ function im = phplot(data, row_labels, col_labels, im_mode, dy_range)
     im = imagesc(ax, col_labels, row_labels, data);
     colormap(ax, "bone");
     cb = colorbar(ax);
-    cb.Label.String = label;
+    cb.Label.String = zlabel;
+    axis tight;
 end
