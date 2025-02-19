@@ -14,48 +14,38 @@ k = 1.3806e-23;
 T = 273.15 + 40; % [K] reciever temperature (from 40C)
 
 %% Customer Requirements
-range_res_req = 1; % [m]
-xrange_res_req = 1; % [m]
-min_range = 50; % [m]
-max_range = 100; % [m]
-aperture_width = 10; % [m]
+grp_range = 75; % [m]
+scene_width = 10; % [m]
+scene_length = 10; % [m]
 platform_height = 20; % [m]
 target_rcs_dBsm = 5; % [dBsm] car radar cross section
 
-range = sqrt(platform_height ^ 2 + max_range ^ 2);
-theta = atan(aperture_width / range); % rad
-grazing_min = atand(platform_height / max_range); % [deg]
-grazing_max = atand(platform_height / min_range); % [deg]
-el_beam_min = grazing_max - grazing_min; % [deg]
-
-PW_max = (2*min_range/c) /2;
-PRF_max = 1 / ((2*max_range/c) + PW_max);
+slant_range = sqrt(platform_height^2 + grp_range^2);
+integration_angle = atan(scene_width / slant_range);
 
 %% Frequency allocation
-f_c = 10.25e9; % [Hz] center frequency
-lam_c = c/f_c; % [m] wavelength
-BW = 150e6; % [Hz] bandwidth
-
-%% Aperture parameters
-% Performance metrics
-xrange_res = lam_c / (2*theta); % [m]
-range_res = c/(2*BW); % [m]
+center_freq = 10.25e9; % [Hz] center frequency
+wavelength = c/center_freq;
+bandwidth = 150e6;
+range_res = c/(2*bandwidth); % [m]
+xrange_res = wavelength/(2*integration_angle);
 
 % Coherent processing 
-v = 0.1; % [m/s] platform velocity
-PW = 150e-9; % [s] pulse width
-B_dop = 2*v/lam_c; % [s] Doppler bandwidth without accounting for beam (forward/backward)
-% F_prf_min = B_dop*1.4; % [Hz] pulse rep. frequency
+platform_spd = 0.1; % [m/s] platform velocity
+pulse_width = 2*slant_range/c;
+B_dop = 2*platform_spd/wavelength; % [s] Doppler bandwidth without accounting for beam (forward/backward)
 F_prf = 1.4*B_dop;
-% F_prf = 100;
-T_CPI = aperture_width / v; % [s] Coherent processing time
+T_CPI = scene_width / platform_spd; % [s] Coherent processing time
 % NOTE: Signal processing gains are db20 because they are voltage-like
 G_CPI_dB = db20(T_CPI * F_prf); % Coherent processing gain 
-G_chirp_dB = db20(PW * BW); % Pulse compression gain 
+G_chirp_dB = db20(pulse_width * bandwidth); % Pulse compression gain 
 
 % Environment effects
-G_path_dB = db10(lam_c^2 / ((4*pi)^3 * range^4));
-% Two-way Friis without G or P
+G_path_dB = db10(wavelength^2 / ((4*pi)^3 * slant_range^4));
+% Two-way Friis (without G or P)
+
+freespace = gainblock(name = "Free space", gain = G_path_dB);
+target = gainblock(name = "Target", gain = target_rcs_dBsm);
 
 %% Hardware parameters
 % ADL8107 Datasheet Rev B
@@ -78,7 +68,6 @@ wr90 = gainblock(name = "PE9856B", gain = 10);
 % CN0566 Circuit Note Rev 0 - onboard antenna gain - page 5
 cn0566 = gainblock(name = "PHASER", gain = -10);
 
-
 % AD9363 Datasheet Rev D
 %   Rx gain - page 24
 %   NF - page 24
@@ -95,37 +84,31 @@ cable = gainblock(name = "Coaxial cable", gain = -1);
 horn_azbw = deg2rad(52.1); % PEWAN090-10SM datasheet
 horn_elbw = deg2rad(51.6); % PEWAN090-10SM datasheet
 
-D_az_tx = fzero(@(Dl) sinc((Dl / lam_c) * (horn_azbw/2)).^2 - 0.5, ...
-    lam_c / horn_azbw);
-D_el_tx = fzero(@(Dl) sinc((Dl / lam_c) * (horn_elbw/2)).^2 - 0.5, ...
-    lam_c / horn_elbw);
+D_az_tx = fzero(@(Dl) sinc((Dl / wavelength) * (horn_azbw/2)).^2 - 0.5, ...
+    wavelength / horn_azbw);
+D_el_tx = fzero(@(Dl) sinc((Dl / wavelength) * (horn_elbw/2)).^2 - 0.5, ...
+    wavelength / horn_elbw);
 
-eff_tx = (mag10(wr90.gain) * lam_c^2) / (4*pi*D_az_tx*D_el_tx);
+eff_tx = (mag10(wr90.gain) * wavelength^2) / (4*pi*D_az_tx*D_el_tx);
 
 % Back-out Rx parameters
 array_gain = mag10(cn0566.gain);
-D_az_rx = 8*(lam_c/2); % 8 elements at lambda/2
-D_el_rx = 4*(lam_c/2); % 8 elements at lambda/2
-eff_rx = array_gain * lam_c^2 / (4*pi*D_az_rx*D_el_rx);
+D_az_rx = 8*(wavelength/2); % 8 elements at lambda/2
+D_el_rx = 4*(wavelength/2); % 8 elements at lambda/2
+eff_rx = array_gain * wavelength^2 / (4*pi*D_az_rx*D_el_rx);
 
-N_thermal_dBm = db10(k*T*BW) + 30;
+N_thermal_dBm = db10(k*T*bandwidth) + 30;
 
-%% Hardware
-
-% Environment effects
-freespace = gainblock(name = "Free space", gain = G_path_dB);
-target = gainblock(name = "Target", gain = target_rcs_dBsm);
-% Components
-
-tx = cable + adl8107 + cable + hmc451 + wr90;
+tx = hmc451 + cable + adl8107 + cable +  wr90;
 rx = cn0566 + adl8107 + cable + ad9363;
 link = tx + freespace + target + rx;
+
+disp(link);
 
 P_signal = link.transmit(7.5);
 nf = link.nf;
 P_noise = N_thermal_dBm + nf;
 
-disp(link);
 fprintf("Actual hardware powers:\n");
 fprintf("Signal power at receiver: %+.1f dB\n", P_signal);
 fprintf("Noise power at receiver: %+.1f dB\n", P_noise)
