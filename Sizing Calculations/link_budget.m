@@ -32,7 +32,8 @@ xrange_res = wavelength/(2*integration_angle);
 
 % Coherent processing 
 platform_spd = 0.1; % [m/s] platform velocity
-pulse_width = 2*slant_range/c;
+grp_time = 2*slant_range/c;
+pulse_width = grp_time;
 B_dop = 2*platform_spd/wavelength; % [s] Doppler bandwidth without accounting for beam (forward/backward)
 F_prf = 1.4*B_dop;
 T_CPI = scene_width / platform_spd; % [s] Coherent processing time

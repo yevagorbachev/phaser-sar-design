@@ -7,7 +7,9 @@ function [pulse] = idealLFM(chirp_bandwidth, pulse_width, sample_freq)
     %   sample_freq         Frequency to sample signal
     % OUTPUTS
     %   pulse               baseband chirped signal samples (complex)
-    t = (0:(1/sample_freq):pulse_width);
+    t = (0:(1/sample_freq):pulse_width)';
     chirp_rate = chirp_bandwidth/pulse_width;
     pulse = exp(1j*(pi * chirp_rate .* (t - pulse_width/2).^2));
+
+    assert(iscolumn(pulse));
 end
