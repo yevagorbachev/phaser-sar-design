@@ -29,21 +29,23 @@ function [samples, fast_time, slow_time] = stripmap_phase_history(aperture, radi
     velocity = [aperture.speed; 0; 0];
     position = velocity * slow_time + [0; 0; aperture.altitude];
     grazing = atan(aperture.altitude / mean(ground_range_swath));
+
     % antenna frame's direction cosine matrix -- such that u(ant) = look * u(world)
     direction = [1 0 0;
         0 cos(grazing) -sin(grazing);
         0 sin(grazing) cos(grazing)];
+    % for stripmap, this just points at the GRP
 
     N_fast = length(fast_time);
     N_slow = length(slow_time);
-    N_targets = length(targets.rcs);
+    % N_targets = length(targets.rcs);
     samples = zeros(N_fast, N_slow);
 
     prog_every = floor(N_slow/50); % 50 progress steps
     prog = progressbar("Generating phase history");
 
     for i_slow = 1:N_slow
-        for i_tgt = 1:N_targets
+        for i_tgt = find(targets.rcs)
             r_tgt = targets.position(:, i_tgt) - position(:, i_slow);
             R_tgt = norm(r_tgt);
             u_tgt = r_tgt/R_tgt;
