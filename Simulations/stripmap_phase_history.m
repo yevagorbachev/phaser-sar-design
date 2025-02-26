@@ -56,7 +56,7 @@ function [samples, fast_time, slow_time] = stripmap_phase_history(aperture, radi
             el = asin(u_in_antenna(3));
 
             G2 = radio.f_tx_gain(az, el) * radio.f_rx_gain(az, el);
-            A_rx = sqrt(targets.rcs(i_tgt) * radio.wavelength^2/(4*pi)^3 * G2 / R_tgt^4);
+            A_rx = sqrt((targets.rcs(i_tgt) * G2 * radio.wavelength^2)/((4*pi)^3 * R_tgt^4));
 
             F_dop = 2*radio.wavelength * velocity' * u_tgt;
             phase_dop = 2*pi*F_dop*t_return;

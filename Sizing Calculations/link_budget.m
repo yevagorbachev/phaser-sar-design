@@ -34,7 +34,7 @@ xrange_res = wavelength/(2*integration_angle);
 platform_spd = 0.1; % [m/s] platform velocity
 grp_time = 2*slant_range/c;
 pulse_width = grp_time;
-B_dop = 2*platform_spd/wavelength; % [s] Doppler bandwidth without accounting for beam (forward/backward)
+B_dop = 2*platform_spd*sin(integration_angle)/wavelength; % [s] Doppler bandwidth without accounting for beam (forward/backward)
 F_prf = 1.4*B_dop;
 T_CPI = scene_width / platform_spd; % [s] Coherent processing time
 % NOTE: Signal processing gains are db20 because they are voltage-like
@@ -73,7 +73,7 @@ cn0566 = gainblock(name = "PHASER", gain = -10);
 %   Rx gain - page 24
 %   NF - page 24
 %   Max Rx power - page 25
-ad9363 = gainblock(name = "PLUTO", gain = 70, NF = 3, p_max = 2.5);
+ad9363 = gainblock(name = "PLUTO", gain = 10, NF = 3, p_max = 2.5);
 
 % wild guess
 cable = gainblock(name = "Coaxial cable", gain = -1);
@@ -100,7 +100,7 @@ eff_rx = array_gain * wavelength^2 / (4*pi*D_az_rx*D_el_rx);
 
 N_thermal_dBm = db10(k*T*bandwidth) + 30;
 
-tx = hmc451 + cable + adl8107 + cable +  wr90;
+tx = hmc451 + cable + adl8107 + cable + wr90;
 rx = cn0566 + adl8107 + cable + ad9363;
 link = tx + freespace + target + rx;
 

@@ -10,6 +10,7 @@ function [pulse] = idealLFM(chirp_bandwidth, pulse_width, sample_freq)
     t = (0:(1/sample_freq):pulse_width)';
     chirp_rate = chirp_bandwidth/pulse_width;
     pulse = exp(1j*(pi * chirp_rate .* (t - pulse_width/2).^2));
+    pulse = real(pulse);
 
     assert(iscolumn(pulse));
 end

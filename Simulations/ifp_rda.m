@@ -28,7 +28,7 @@ function [image, t_fast, T_slow, interms] = ifp_rda(samples, t_fast, T_slow, s_t
     samples_cT = ifft(samples_fT .* range_MF, N_range, 1);
     N_bins = size(samples, 1) - length(s_tx);
     samples_cT = samples_cT((end-N_bins+1):end, :);
-    t_fast = t_fast((end-N_bins+1):end);
+    t_fast = t_fast(1:N_bins);
 
     prog(0.25, "Finished range compression")
     

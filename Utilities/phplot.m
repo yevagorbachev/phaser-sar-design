@@ -46,7 +46,8 @@ function im = phplot(data, row_labels, col_labels, im_mode, dy_range)
     data(data < dfloor) = dfloor;
 
     ax = gca;
-    im = imagesc(ax, col_labels, row_labels, data);
+    im = imagesc(ax, col_labels, row_labels, data, ...
+        HandleVisibility = "off");
     colormap(ax, "bone");
     cb = colorbar(ax);
     cb.Label.String = zlabel;
