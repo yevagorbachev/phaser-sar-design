@@ -1,7 +1,14 @@
-function [samples, fast_time, slow_time] = stripmap_phase_history(aperture, radio, targets)
+function [samples, fast_time, slow_time] = stripmap_phase_history(aperture, radio, targets, config)
+    arguments
+        aperture (1,1) struct {mustBeFields(aperture, ...
+            ["altitude", "ground_range", "scene_dims", "speed", "pulse_rate"])};
+        radio (1,1) struct {mustBeFields(radio, ...
+            ["wavelength", "sample_freq", "pulse", "f_tx_gain", "f_rx_gain"])};
+        targets (1,1) struct {mustBeFields(targets, ["position", "rcs"])};
+        config.collection (1,1) string {mustBeMember(config.collection, ...
+            ["stripmap", "spotlight"])} = "stripmap";
+    end
     mustBeFields(aperture, ["altitude", "ground_range", "scene_dims", "speed", "pulse_rate"]);
-    mustBeFields(radio, ["wavelength", "sample_freq", "pulse", "f_tx_gain", "f_rx_gain"]);
-    mustBeFields(targets, ["position", "rcs"]);
     
     wavespeed = 299792458; % [m/s] speed of light
 
@@ -58,14 +65,15 @@ function [samples, fast_time, slow_time] = stripmap_phase_history(aperture, radi
             el = asin(u_in_antenna(3));
 
             G2 = radio.f_tx_gain(az, el) * radio.f_rx_gain(az, el);
-            A_rx = sqrt((targets.rcs(i_tgt) * G2 * radio.wavelength^2)/((4*pi)^3 * R_tgt^4));
+            A_rx = 1;%sqrt((targets.rcs(i_tgt) * G2 * radio.wavelength^2)/((4*pi)^3 * R_tgt^4));
 
-            F_dop = 2*radio.wavelength * velocity' * u_tgt;
-            phase_dop = 2*pi*F_dop*t_return;
-            phase_tgt = -(4*pi/radio.wavelength)*R_tgt;
-
-            return_pulse = radio.pulse .* exp(1j*(phase_dop + phase_tgt)); 
-            s_rx = A_rx * interp1(t_return, return_pulse, fast_time, "linear", 0);
+            % F_dop = 2*radio.wavelength * velocity' * u_tgt;
+            % phase_dop = 0;%2*pi*F_dop*t_return;
+            % phase_tgt = -(4*pi/radio.wavelength)*R_tgt;
+            %
+            % return_pulse = radio.pulse .* exp(1j*(phase_dop + phase_tgt)); 
+            
+            s_rx = A_rx * interp1(t_return, radio.pulse .* A_rx, fast_time, "linear", 0);
             s_rx(isnan(s_rx)) = 0;
 
             samples(:, i_slow) = samples(:, i_slow) + s_rx;

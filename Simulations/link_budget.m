@@ -14,7 +14,7 @@ k = 1.3806e-23;
 T = 273.15 + 40; % [K] reciever temperature (from 40C)
 
 %% Customer Requirements
-grp_range = 75; % [m]
+grp_range = 300; % [m]
 scene_width = 10; % [m]
 scene_length = 10; % [m]
 platform_height = 20; % [m]
@@ -26,7 +26,7 @@ integration_angle = atan(scene_width / slant_range);
 %% Frequency allocation
 center_freq = 10.25e9; % [Hz] center frequency
 wavelength = c/center_freq;
-bandwidth = 150e6;
+bandwidth = 500e6;
 range_res = c/(2*bandwidth); % [m]
 xrange_res = wavelength/(2*integration_angle);
 
@@ -38,6 +38,7 @@ B_dop = 2*platform_spd*sin(integration_angle)/wavelength; % [s] Doppler bandwidt
 F_prf = 1.4*B_dop;
 T_CPI = scene_width / platform_spd; % [s] Coherent processing time
 % NOTE: Signal processing gains are db20 because they are voltage-like
+
 G_CPI_dB = db20(T_CPI * F_prf); % Coherent processing gain 
 G_chirp_dB = db20(pulse_width * bandwidth); % Pulse compression gain 
 

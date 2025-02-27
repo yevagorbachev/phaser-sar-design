@@ -16,18 +16,19 @@ pulse_time = (0:(1/radio.sample_freq):pulse_width)';
 radio.pulse = cos(2*pi*center_freq*pulse_time + ...
     pi*(bandwidth/pulse_width)*(pulse_time - mean(pulse_time)).^2);
 
-radio.f_tx_gain = ant_rectangular([D_az_tx, D_el_tx] / wavelength, eff_tx);
-radio.f_rx_gain = ant_rectangular([D_az_rx, D_el_rx] / wavelength, eff_rx);
+radio.f_tx_gain = @(az, el) ones(size(az)) .* ones(size(el)); %;ant_rectangular([D_az_tx, D_el_tx] / wavelength, eff_tx);
+radio.f_rx_gain = radio.f_tx_gain;
+% radio.f_rx_gain = ant_rectangular([D_az_rx, D_el_rx] / wavelength, eff_rx);
 
 aperture.ground_range = grp_range;
 aperture.altitude = platform_height;
 aperture.scene_dims = [scene_width; scene_length];
 aperture.speed = platform_spd;
-aperture.pulse_rate = F_prf;
+aperture.pulse_rate = 2*F_prf;
 
 targets.position = grp_targets([0; aperture.ground_range; 0], ...
-    [0 0], [-2 0], [2 0], [0 -2], [0 2], [7.5 0]);
-targets.rcs = [1 0 0 1 1 0];
+    [0 0], [-2 0], [2 0], [0 -2.5], [0 2.5], [7.5 0]);
+targets.rcs = [1 1 1 1 1 1];
 
 if plot_laydown
     figure(name = "Laydown");
@@ -121,25 +122,31 @@ sampled = movsum(dechirped, seconds(1/rx_rate), 1, ...
 rx_fast_time = (fast_time(1):(1/rx_rate):fast_time(end))';
 sampled = interp1(fast_time, sampled, rx_fast_time, "linear", 0);
 
+% cross mix
+k_a = 2*aperture.speed^2/(radio.wavelength*slant_range);
+% f_dop_bins = freqaxis(aperture.pulse_rate, size(sampled, 2));
+cross_chirp = exp(-1j*pi*slow_time.^2 * k_a);
+sampled = sampled .* cross_chirp;
 
-figure(name = "Dechirped phase history");
+figure(name = "dechirped phase history");
 tiledlayout(1,2);
 
 nexttile;
-title("Carrier-band")
+title("carrier-band")
 phplot(dechirped, 1e9*fast_time, slow_time, "re");
-xlabel("Slow-time [s]");
-ylabel("Fast-time [ns]");
+xlabel("slow-time [s]");
+ylabel("fast-time [ns]");
 
 nexttile;
-title("Sampled")
+title("sampled")
 phplot(sampled, 1e9*rx_fast_time, slow_time, "re");
-xlabel("Slow-time [s]");
-ylabel("Fast-time [ns]");
+xlabel("slow-time [s]");
+ylabel("fast-time [ns]");
 
 figure(name = "Approximate PFA");
+% inv = ifftshift(ifft(sampled, size(sampled, 1), 1), 1);
 inv = ifftshift(ifftshift(ifft2(sampled), 1), 2);
 phplot(inv, 1e9*rx_fast_time, slow_time, "abs");
-xlabel("Slow-time [s]");
-ylabel("Fast-time [ns]");
+xlabel("slow-time [s]");
+ylabel("fast-time [ns]");
 
