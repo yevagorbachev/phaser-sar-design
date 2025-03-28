@@ -1,15 +1,14 @@
-function [samples, fast_time, slow_time] = stripmap_phase_history(aperture, radio, targets, config)
+function data = stripmap_phase_history(aperture, radio, targets, config)
     arguments
         aperture (1,1) struct {mustBeFields(aperture, ...
             ["altitude", "ground_range", "scene_dims", "speed", "pulse_rate"])};
         radio (1,1) struct {mustBeFields(radio, ...
-            ["wavelength", "sample_freq", "pulse", "f_tx_gain", "f_rx_gain"])};
-        targets (1,1) struct {mustBeFields(targets, ["position", "rcs"])};
-        config.collection (1,1) string {mustBeMember(config.collection, ...
-            ["stripmap", "spotlight"])} = "stripmap";
+            ["wavelength", "sample_freq", "ramp_rate", "ramp_time", "f_tx_gain", "f_rx_gain"])};
+        targets (1,:) struct {mustBeFields(targets, ["position", "rcs"])};
+        config.amplitude (1,1) string {mustBeMember(config.amplitude, ...
+            ["unit", "true"])} = "true";
     end
-    mustBeFields(aperture, ["altitude", "ground_range", "scene_dims", "speed", "pulse_rate"]);
-    
+
     wavespeed = 299792458; % [m/s] speed of light
 
     ground_range_swath = aperture.ground_range + aperture.scene_dims(2) * [-1/2 1/2];
@@ -18,7 +17,7 @@ function [samples, fast_time, slow_time] = stripmap_phase_history(aperture, radi
     fast_time_range = round(fast_time_range * radio.sample_freq) / radio.sample_freq;
 
     % one-sided pulse time vector (column)
-    pulse_time = ((1:length(radio.pulse))-1) / radio.sample_freq;
+    pulse_time = 0:(1/radio.sample_freq):radio.ramp_time;
     pulse_time = pulse_time';
     % fast time vector padded by an additional pulse (to capture entire far-range return)
     fast_time = fast_time_range(1):(1/radio.sample_freq):(fast_time_range(2) + pulse_time(end));
@@ -48,32 +47,35 @@ function [samples, fast_time, slow_time] = stripmap_phase_history(aperture, radi
     % N_targets = length(targets.rcs);
     samples = zeros(N_fast, N_slow);
 
-    prog_every = floor(N_slow/50); % 50 progress steps
+    prog_every = floor(N_slow/100); % 100 progress steps
     prog = progressbar("Generating phase history");
 
+    tgt_to_simulate = find([targets.rcs] ~= 0);
     for i_slow = 1:N_slow
-        for i_tgt = find(targets.rcs)
-            r_tgt = targets.position(:, i_tgt) - position(:, i_slow);
+        for i_tgt = tgt_to_simulate
+            r_tgt = targets(i_tgt).position - position(:, i_slow);
             R_tgt = norm(r_tgt);
             u_tgt = r_tgt/R_tgt;
 
             t_tgt = 2*R_tgt/wavespeed;
             t_return = t_tgt + pulse_time;
 
-            u_in_antenna = direction * u_tgt;
-            az = asin(u_in_antenna(1));
-            el = asin(u_in_antenna(3));
-
-            G2 = radio.f_tx_gain(az, el) * radio.f_rx_gain(az, el);
-            A_rx = 1;%sqrt((targets.rcs(i_tgt) * G2 * radio.wavelength^2)/((4*pi)^3 * R_tgt^4));
-
-            % F_dop = 2*radio.wavelength * velocity' * u_tgt;
-            % phase_dop = 0;%2*pi*F_dop*t_return;
-            % phase_tgt = -(4*pi/radio.wavelength)*R_tgt;
-            %
-            % return_pulse = radio.pulse .* exp(1j*(phase_dop + phase_tgt)); 
+            if config.amplitude == "unit"
+                A_rx = 1;
+            elseif config.amplitude == "true"
+                u_in_antenna = direction * u_tgt;
+                az = asin(u_in_antenna(1));
+                el = asin(u_in_antenna(3));
+                G2 = radio.f_tx_gain(az, el) * radio.f_rx_gain(az, el);
+                A_rx = sqrt((targets(i_tgt).rcs * G2 * radio.wavelength^2)/((4*pi)^3 * R_tgt^4));
+            end
             
-            s_rx = A_rx * interp1(t_return, radio.pulse .* A_rx, fast_time, "linear", 0);
+            phase_tgt = -(4*pi/radio.wavelength) * R_tgt;
+            phase_ramp = pi*radio.ramp_rate .* (pulse_time - mean(pulse_time)).^2;
+            phase = phase_tgt + phase_ramp;
+            phase_rx = interp1(t_return, phase, fast_time, "linear", NaN);
+
+            s_rx = A_rx * exp(1j*phase_rx);
             s_rx(isnan(s_rx)) = 0;
 
             samples(:, i_slow) = samples(:, i_slow) + s_rx;
@@ -84,6 +86,15 @@ function [samples, fast_time, slow_time] = stripmap_phase_history(aperture, radi
         end
     end
 
+    data = phasehistory(samples);
+    data.slow_time = slow_time;
+    data.fast_time = fast_time;
+    data.position = position;
+    data.velocity = velocity;
+    data.grp = [0; aperture.ground_range; 0];
+    data.wavelength = radio.wavelength;
+    data.ramp_rate = radio.ramp_rate;
+    data.ramp_time = radio.ramp_time;
 end
 
 function mustBeFields(structure, fields)

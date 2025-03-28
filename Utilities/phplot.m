@@ -1,6 +1,5 @@
 %% Plot phase history
-% im = phplot(data, im_mode, x_label, x_values, y_label, y_values)
-% INPUTS
+% im = phplot(data, row_labels, col_labels, im_mode, dy_range)
 %   data    aligned [y, x]
 
 % TODO specify 
@@ -9,7 +8,7 @@ function im = phplot(data, row_labels, col_labels, im_mode, dy_range)
         data (:, :) double;
         row_labels (:, 1) double;
         col_labels (1, :) double;
-        im_mode (1,1) string;
+        im_mode (1,1) string {mustBeMember(im_mode, ["log", "abs", "re", "im", "ph"])};
         dy_range (1,1) double {mustBePositive, mustBeReal} = Inf ;
     end
 

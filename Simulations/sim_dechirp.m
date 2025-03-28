@@ -2,58 +2,64 @@
 clear;
 link_budget;
 
-set(groot, "DefaultAxesNextPlot", "add");
-set(groot, "DefaultAxesXGrid", "on");
-set(groot, "DefaultAxesYGrid", "on");
-
+c = 299792458;
+k = 1.38e-23; % [Js/K] boltzmann's constant
 % enable or disable plots
-plot_laydown = true;
+plot_laydown = false;
 add_noise = false;
+plot_interm = false;
 
-radio.wavelength = wavelength;
-radio.sample_freq = 10*center_freq;
-pulse_time = (0:(1/radio.sample_freq):pulse_width)';
-radio.pulse = cos(2*pi*center_freq*pulse_time + ...
-    pi*(bandwidth/pulse_width)*(pulse_time - mean(pulse_time)).^2);
+pulse_width = 1e-3;
+bandwidth = 100e6;
+radio.wavelength = 0.0333;
+radio.sample_freq = 100e3;
+radio.ramp_rate = bandwidth/pulse_width;
+radio.ramp_time = pulse_width;
+dims = [1.62 0.254]; % [m] [az, el]
+efficiency = 0.7;
+radio.f_tx_gain = ant_rectangular(dims / radio.wavelength, efficiency);
+radio.f_rx_gain = ant_rectangular(dims / radio.wavelength, efficiency);
 
-radio.f_tx_gain = @(az, el) ones(size(az)) .* ones(size(el)); %;ant_rectangular([D_az_tx, D_el_tx] / wavelength, eff_tx);
-radio.f_rx_gain = radio.f_tx_gain;
-% radio.f_rx_gain = ant_rectangular([D_az_rx, D_el_rx] / wavelength, eff_rx);
+aperture.ground_range = 12.9e3;
+aperture.altitude = 7620;
+aperture.scene_dims = [100; 100];
+aperture.speed = 150;
+aperture.pulse_rate = 500;
 
-aperture.ground_range = grp_range;
-aperture.altitude = platform_height;
-aperture.scene_dims = [scene_width; scene_length];
-aperture.speed = platform_spd;
-aperture.pulse_rate = 2*F_prf;
-
-targets.position = grp_targets([0; aperture.ground_range; 0], ...
-    [0 0], [-2 0], [2 0], [0 -2.5], [0 2.5], [7.5 0]);
-targets.rcs = [1 1 1 1 1 1];
+r_grp = [0; aperture.ground_range; 0];
+targets(1).position = r_grp + [0; 0; 0];
+targets(1).rcs = 1;
+targets(2).position = r_grp + [50; 50; 0];
+targets(2).rcs = 1;
+targets(3).position = r_grp + [-50; 0; 0];
+targets(3).rcs = 1;
+targets(4).position = r_grp + [0; 50; 0];
+targets(4).rcs = 1;
 
 if plot_laydown
-    figure(name = "Laydown");
+    % figure(name = "Laydown");
 
-    rcs_dB = db10(targets.rcs);
-    for i_target = find(targets.rcs)
-        x = targets.position(:, i_target);
-        display_rcs = rcs_dB(i_target)/5 + 2;
-        plot(x(1), x(2), "+", LineWidth = display_rcs, MarkerSize = 10 + display_rcs, ...
-            DisplayName = sprintf("Target %d", i_target));
-
-        xlabel("Cross range [m]");
-        ylabel("Ground range [m]");
-        daspect([1 1 1]);
-    end
-    legend;
-
-    rect_x = aperture.scene_dims(1) * [-1/2 1/2];
-    rect_y = aperture.ground_range + aperture.scene_dims(2) * [-1/2 1/2];
-    rectangle(Position = [rect_x(1) rect_y(1) diff(rect_x) diff(rect_y)]);
-
-    [x_min, x_max] = bounds(targets.position(1, :));
-    [y_min, y_max] = bounds(targets.position(2, :));
-    xlim([x_min x_max] + (x_max - x_min)/3 * [-1 1]) ;
-    ylim([y_min y_max] + (y_max - y_min)/3 * [-1 1]);
+    % rcs_dB = db10(targets.rcs);
+    % for i_target = find(targets.rcs)
+    %     x = targets.position(:, i_target);
+    %     display_rcs = 1;%(rcs_dB(i_target) - min(rcs_dB))/5 + 2;
+    %     plot(x(1), x(2), "+", LineWidth = display_rcs, MarkerSize = 10 + display_rcs, ...
+    %         DisplayName = sprintf("Target %d", i_target));
+    %
+    %     xlabel("Cross range [m]");
+    %     ylabel("Ground range [m]");
+    %     daspect([1 1 1]);
+    % end
+    % legend;
+    %
+    % rect_x = aperture.scene_dims(1) * [-1/2 1/2];
+    % rect_y = aperture.ground_range + aperture.scene_dims(2) * [-1/2 1/2];
+    % rectangle(Position = [rect_x(1) rect_y(1) diff(rect_x) diff(rect_y)]);
+    %
+    % [x_min, x_max] = bounds(targets.position(1, :));
+    % [y_min, y_max] = bounds(targets.position(2, :));
+    % xlim([x_min x_max] + (x_max - x_min)/3 * [-1 1]) ;
+    % ylim([y_min y_max] + (y_max - y_min)/3 * [-1 1]);
 
     figure(name = "Antenna patterns");
     layout = tiledlayout(1,2);
@@ -81,10 +87,10 @@ if plot_laydown
     layout.TileSpacing = "compact";
 end
 
-[samples, fast_time, slow_time] = stripmap_phase_history(aperture, radio, targets);
+data = spotlight_phase_history(aperture, radio, targets);
 
+figure(name = "Raw phase history");
 if add_noise
-    figure(name = "Raw phase history");
     tiledlayout(1, 2);
 
     nexttile;
@@ -103,50 +109,14 @@ if add_noise
     phplot(samples, 1e9*fast_time, slow_time, "re");
     xlabel("Slow-time [s]");
     ylabel("Fast-time [ns]");
+else
+    title("Clean phase");
+    plot(data, scale = "re");
+    xlabel("Slow-time [s]");
+    ylabel("Fast-time [ns]");
 end
 
-slant_range = sqrt(aperture.altitude.^2 + aperture.ground_range.^2);
-grp_time = 2*slant_range/c;
-local_osc = exp(1j*(2*pi*center_freq*pulse_time + ...
-    pi*(bandwidth/pulse_width)*(pulse_time - mean(pulse_time)).^2));
+image = ifp_polar(data);
 
-rx_rate = 20e6;
-% mix
-local_osc = interp1(pulse_time + grp_time, local_osc, fast_time, "linear", 0);
-mixed = samples .* local_osc;
-dechirped = lowpass(mixed, rx_rate, radio.sample_freq);
-
-% sample
-sampled = movsum(dechirped, seconds(1/rx_rate), 1, ...
-    SamplePoints = seconds(fast_time), Endpoints = "shrink");
-rx_fast_time = (fast_time(1):(1/rx_rate):fast_time(end))';
-sampled = interp1(fast_time, sampled, rx_fast_time, "linear", 0);
-
-% cross mix
-k_a = 2*aperture.speed^2/(radio.wavelength*slant_range);
-% f_dop_bins = freqaxis(aperture.pulse_rate, size(sampled, 2));
-cross_chirp = exp(-1j*pi*slow_time.^2 * k_a);
-sampled = sampled .* cross_chirp;
-
-figure(name = "dechirped phase history");
-tiledlayout(1,2);
-
-nexttile;
-title("carrier-band")
-phplot(dechirped, 1e9*fast_time, slow_time, "re");
-xlabel("slow-time [s]");
-ylabel("fast-time [ns]");
-
-nexttile;
-title("sampled")
-phplot(sampled, 1e9*rx_fast_time, slow_time, "re");
-xlabel("slow-time [s]");
-ylabel("fast-time [ns]");
-
-figure(name = "Approximate PFA");
-% inv = ifftshift(ifft(sampled, size(sampled, 1), 1), 1);
-inv = ifftshift(ifftshift(ifft2(sampled), 1), 2);
-phplot(inv, 1e9*rx_fast_time, slow_time, "abs");
-xlabel("slow-time [s]");
-ylabel("fast-time [ns]");
-
+figure(name = "Formed image");
+plot(image, scale = "abs");
